@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binary Trading AI Agent</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>🤖 Trading AI</h1>
+                <div class="status-indicator" id="statusIndicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Initializing...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Current Signal -->
+        <section class="signal-section">
+            <h2>📊 Current Signal</h2>
+            <div class="signal-card" id="signalCard">
+                <div class="signal-empty" id="signalEmpty">
+                    <div class="loading-spinner"></div>
+                    <p>Waiting for signal...</p>
+                </div>
+                <div class="signal-content" id="signalContent" style="display: none;">
+                    <div class="signal-direction" id="signalDirection">
+                        <span class="signal-icon">📈</span>
+                        <span class="signal-text">UP</span>
+                    </div>
+                    <div class="signal-confidence">
+                        <div class="confidence-label">Confidence</div>
+                        <div class="confidence-value" id="confidenceValue">0%</div>
+                        <div class="confidence-bar">
+                            <div class="confidence-fill" id="confidenceFill"></div>
+                        </div>
+                    </div>
+                    <div class="signal-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">Method:</span>
+                            <span class="meta-value" id="methodValue">-</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Patterns:</span>
+                            <span class="meta-value" id="patternsValue">-</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Time:</span>
+                            <span class="meta-value" id="timeValue">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Performance Stats -->
+        <section class="stats-section">
+            <h2>📈 Performance</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalPredictions">0</div>
+                    <div class="stat-label">Total Predictions</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="winRate">0%</div>
+                    <div class="stat-label">Win Rate</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="todayStats">0W / 0L</div>
+                    <div class="stat-label">Today</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="modelAccuracy">0%</div>
+                    <div class="stat-label">Model Accuracy</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Recent Predictions -->
+        <section class="recent-section">
+            <h2>📋 Recent Predictions</h2>
+            <div class="recent-list" id="recentList">
+                <div class="recent-empty">No predictions yet</div>
+            </div>
+        </section>
+
+        <!-- Settings -->
+        <section class="settings-section">
+            <h2>⚙️ Settings</h2>
+            <div class="settings-content">
+                <div class="setting-item">
+                    <label for="minConfidence">Min Confidence</label>
+                    <div class="slider-container">
+                        <input type="range" id="minConfidence" min="50" max="90" value="65" step="5">
+                        <span class="slider-value" id="minConfidenceValue">65%</span>
+                    </div>
+                </div>
+                <div class="setting-item">
+                    <label for="notifications">Notifications</label>
+                    <label class="toggle">
+                        <input type="checkbox" id="notifications" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div class="setting-item">
+                    <label for="learningMode">Learning Mode</label>
+                    <label class="toggle">
+                        <input type="checkbox" id="learningMode" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div class="setting-item">
+                    <label for="geminiApiKey">Gemini API Key</label>
+                    <input type="password" id="geminiApiKey" placeholder="Enter API key..." class="api-key-input">
+                </div>
+                <div class="setting-actions">
+                    <button class="btn btn-secondary" id="exportBtn">Export Data</button>
+                    <button class="btn btn-danger" id="resetBtn">Reset Model</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script type="module" src="popup.js"></script>
+</body>
+</html>

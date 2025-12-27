@@ -1,0 +1,27 @@
+node_modules/
+dist/
+build/
+.env
+*.log
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/
+*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.Python
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Extension builds
+extension/dist/
