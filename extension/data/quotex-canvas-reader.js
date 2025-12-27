@@ -39,10 +39,43 @@ export class QuotexCanvasReader {
             const imageData = this.ctx.getImageData(0, 0, width, height);
             const pixels = imageData.data;
 
+            // Debug: Log canvas info
+            console.log(`[Quotex Reader] Canvas size: ${width}x${height}`);
+
             // Sample candles from right to left (newest to oldest)
             const candles = [];
-            const candleWidth = 10; // Approximate width per candle
+            const candleWidth = 15; // Increased width for better detection
             const numCandles = Math.min(20, Math.floor(width / candleWidth));
+
+            // First, detect if there are ANY colored pixels
+            let totalGreen = 0;
+            let totalRed = 0;
+            let totalWhite = 0;
+
+            for (let i = 0; i < pixels.length; i += 4) {
+                const r = pixels[i];
+                const g = pixels[i + 1];
+                const b = pixels[i + 2];
+                const a = pixels[i + 3];
+
+                if (a < 50) continue;
+
+                // Count green pixels (more lenient)
+                if (g > r + 20 && g > b + 20) totalGreen++;
+
+                // Count red pixels (more lenient)
+                if (r > g + 20 && r > b + 20) totalRed++;
+
+                // Count white/light pixels
+                if (r > 200 && g > 200 && b > 200) totalWhite++;
+            }
+
+            console.log(`[Quotex Reader] Pixel analysis: Green=${totalGreen}, Red=${totalRed}, White=${totalWhite}`);
+
+            if (totalGreen === 0 && totalRed === 0) {
+                console.warn('[Quotex Reader] No colored candles detected - canvas might be empty or using different colors');
+                return [];
+            }
 
             for (let i = 0; i < numCandles; i++) {
                 const x = width - (i * candleWidth) - candleWidth / 2;
@@ -55,7 +88,9 @@ export class QuotexCanvasReader {
 
             if (candles.length > 0) {
                 this.lastCandles = candles;
-                logger.debug(`Extracted ${candles.length} candles from Quotex`);
+                console.log(`[Quotex Reader] ✅ Extracted ${candles.length} candles`);
+            } else {
+                console.warn('[Quotex Reader] ⚠️ No candles extracted despite colored pixels');
             }
 
             return candles;
@@ -72,46 +107,70 @@ export class QuotexCanvasReader {
         // Scan vertical column to find green/red pixels
         let minY = height;
         let maxY = 0;
-        let isGreen = false;
-        let isRed = false;
-        let colorCount = { green: 0, red: 0 };
+        let colorCount = { green: 0, red: 0, white: 0 };
+        let pixelsFound = 0;
 
-        for (let y = 0; y < height; y++) {
-            const idx = (Math.floor(y) * width + Math.floor(x)) * 4;
-            const r = pixels[idx];
-            const g = pixels[idx + 1];
-            const b = pixels[idx + 2];
-            const a = pixels[idx + 3];
+        // Scan a wider area around X for better detection
+        for (let offsetX = -3; offsetX <= 3; offsetX++) {
+            const scanX = Math.floor(x + offsetX);
+            if (scanX < 0 || scanX >= width) continue;
 
-            if (a < 100) continue; // Skip transparent
+            for (let y = 0; y < height; y++) {
+                const idx = (Math.floor(y) * width + scanX) * 4;
+                const r = pixels[idx];
+                const g = pixels[idx + 1];
+                const b = pixels[idx + 2];
+                const a = pixels[idx + 3];
 
-            // Detect green (bullish) - Quotex uses bright green
-            if (g > 150 && g > r && g > b) {
-                isGreen = true;
-                colorCount.green++;
-                minY = Math.min(minY, y);
-                maxY = Math.max(maxY, y);
-            }
+                if (a < 50) continue; // Skip transparent
 
-            // Detect red (bearish) - Quotex uses bright red
-            if (r > 150 && r > g && r > b) {
-                isRed = true;
-                colorCount.red++;
-                minY = Math.min(minY, y);
-                maxY = Math.max(maxY, y);
+                pixelsFound++;
+
+                // Detect green (bullish) - more lenient thresholds
+                if (g > r + 20 && g > b + 20 && g > 80) {
+                    colorCount.green++;
+                    minY = Math.min(minY, y);
+                    maxY = Math.max(maxY, y);
+                }
+
+                // Detect red (bearish) - more lenient thresholds
+                if (r > g + 20 && r > b + 20 && r > 80) {
+                    colorCount.red++;
+                    minY = Math.min(minY, y);
+                    maxY = Math.max(maxY, y);
+                }
+
+                // Detect white/light (might be wicks)
+                if (r > 200 && g > 200 && b > 200) {
+                    colorCount.white++;
+                    minY = Math.min(minY, y);
+                    maxY = Math.max(maxY, y);
+                }
             }
         }
 
         // If no colored pixels found, skip
-        if (!isGreen && !isRed) {
+        if (colorCount.green === 0 && colorCount.red === 0 && colorCount.white === 0) {
             return null;
         }
 
-        // Determine candle direction based on color count
-        const direction = colorCount.green > colorCount.red ? 'green' : 'red';
+        // Need at least some height
+        if (maxY - minY < 5) {
+            return null;
+        }
+
+        // Determine candle direction
+        let direction;
+        if (colorCount.green > colorCount.red) {
+            direction = 'green';
+        } else if (colorCount.red > colorCount.green) {
+            direction = 'red';
+        } else {
+            // If equal or both zero, use white as neutral
+            direction = 'neutral';
+        }
 
         // Create candle object with estimated OHLC
-        // Note: Without actual price data, we use relative positions
         const high = this.mapYToPrice(minY, height);
         const low = this.mapYToPrice(maxY, height);
         const range = high - low;
@@ -119,15 +178,18 @@ export class QuotexCanvasReader {
         // Estimate open/close based on direction
         let open, close;
         if (direction === 'green') {
-            open = low + range * 0.3;
+            open = low + range * 0.2;
             close = high - range * 0.1;
-        } else {
-            open = high - range * 0.3;
+        } else if (direction === 'red') {
+            open = high - range * 0.2;
             close = low + range * 0.1;
+        } else {
+            open = low + range * 0.5;
+            close = low + range * 0.5;
         }
 
         return {
-            timestamp: Date.now() - (x / width) * 3600000, // Rough estimate
+            timestamp: Date.now() - (x / width) * 3600000,
             open,
             close,
             high,
