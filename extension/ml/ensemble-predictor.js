@@ -47,7 +47,7 @@ export class EnsemblePredictor {
             const mlPrediction = await this.getMLPrediction(features);
 
             // Combine predictions
-            const ensemblePrediction = this.combinePredict ions(
+            const ensemblePrediction = this.combinePredictions(
                 historicalPrediction,
                 mlPrediction,
                 features

@@ -6,6 +6,7 @@
 import { database } from './data/database.js';
 import { logger } from './utils/logger.js';
 import { CONFIG } from './config.js';
+import { FeatureExtractor } from './ml/feature-extractor.js';
 import { NeuralNetwork } from './ml/neural-network.js';
 import { EnsemblePredictor } from './ml/ensemble-predictor.js';
 import { GeminiClient } from './ai/gemini-client.js';
@@ -308,3 +309,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Export for testing
 export { agent, TradingAIAgent };
+
+// Auto-initialize when service worker loads
+agent.init().catch(error => {
+    logger.error('Auto-initialization failed', error);
+});

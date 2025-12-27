@@ -4,6 +4,7 @@
  */
 
 import { CanvasReader } from './data/canvas-reader.js';
+import { QuotexCanvasReader } from './data/quotex-canvas-reader.js';
 import { CONFIG } from './config.js';
 
 class TradingPlatformObserver {
@@ -42,14 +43,22 @@ class TradingPlatformObserver {
      * Find chart canvas and start observing
      */
     findAndObserveCanvas() {
+        console.log('[Trading AI] Searching for chart canvas...');
+
         // Try to find canvas immediately
         let canvas = CanvasReader.findChartCanvas();
 
         if (canvas) {
+            console.log('[Trading AI] ✅ Canvas found!', {
+                width: canvas.width,
+                height: canvas.height,
+                id: canvas.id,
+                className: canvas.className
+            });
             this.setupCanvasReader(canvas);
         } else {
             // Canvas not found, observe DOM for changes
-            console.log('[Trading AI] Canvas not found, observing DOM...');
+            console.log('[Trading AI] ⏳ Canvas not found immediately, observing DOM...');
             this.observeDOM();
         }
     }
@@ -83,7 +92,13 @@ class TradingPlatformObserver {
      * Setup canvas reader
      */
     setupCanvasReader(canvas) {
-        this.canvasReader = new CanvasReader(this.platformType);
+        // Use specialized reader for Quotex
+        if (this.platformType === 'quotex') {
+            console.log('[Trading AI] Using Quotex-specific canvas reader');
+            this.canvasReader = new QuotexCanvasReader();
+        } else {
+            this.canvasReader = new CanvasReader(this.platformType);
+        }
 
         if (this.canvasReader.init(canvas)) {
             console.log('[Trading AI] Canvas reader initialized');
@@ -149,12 +164,12 @@ class TradingPlatformObserver {
                     platform: this.platformType
                 });
 
-                console.log(`[Trading AI] Sent ${candles.length} candles to background`);
+                console.log(`[Trading AI] ✅ Sent ${candles.length} candles to background`);
             } else {
-                console.warn('[Trading AI] No candles detected');
+                console.warn('[Trading AI] ⚠️ No candles detected in current scan');
             }
         } catch (error) {
-            console.error('[Trading AI] Scan error:', error);
+            console.error('[Trading AI] ❌ Scan error:', error);
         }
     }
 
