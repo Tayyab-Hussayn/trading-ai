@@ -1,221 +1,154 @@
 /**
- * Background Service Worker - Main orchestrator for Binary Trading AI Agent
- * Handles all AI operations, predictions, learning, and communication
+ * Background Service Worker - WebSocket Bridge
+ * Connects extension to Python backend via WebSocket
  */
 
-import { database } from './data/database.js';
-import { logger } from './utils/logger.js';
-import { CONFIG } from './config.js';
-import { FeatureExtractor } from './ml/feature-extractor.js';
-import { NeuralNetwork } from './ml/neural-network.js';
-import { EnsemblePredictor } from './ml/ensemble-predictor.js';
-import { GeminiClient } from './ai/gemini-client.js';
-import { RiskManager } from './risk/risk-manager.js';
-import { Validator } from './learning/validator.js';
-import { Trainer } from './learning/trainer.js';
+const BACKEND_URL = 'ws://localhost:8000/ws';
 
-class TradingAIAgent {
+class BackendBridge {
     constructor() {
-        this.initialized = false;
-        this.neuralNetwork = null;
-        this.ensemblePredictor = null;
-        this.geminiClient = null;
-        this.riskManager = null;
-        this.validator = null;
-        this.trainer = null;
+        this.ws = null;
+        this.connected = false;
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 5;
+        this.reconnectDelay = 3000;
         this.currentPrediction = null;
-        this.validationInterval = null;
-        this.retrainingInterval = null;
     }
 
     /**
-     * Initialize the AI agent
+     * Connect to Python backend
      */
-    async init() {
-        if (this.initialized) {
-            logger.info('Agent already initialized');
-            return true;
-        }
-
-        logger.info('Initializing Trading AI Agent');
+    async connect() {
+        console.log('[Backend Bridge] Connecting to:', BACKEND_URL);
 
         try {
-            // Initialize database
-            await database.init();
+            this.ws = new WebSocket(BACKEND_URL);
 
-            // Initialize neural network
-            this.neuralNetwork = new NeuralNetwork();
-            await this.neuralNetwork.loadModel();
+            this.ws.onopen = () => {
+                console.log('✅ Connected to Python backend');
+                this.connected = true;
+                this.reconnectAttempts = 0;
 
-            // Initialize components
-            this.ensemblePredictor = new EnsemblePredictor(database, this.neuralNetwork);
-            this.geminiClient = new GeminiClient();
-            await this.geminiClient.init();
-            this.riskManager = new RiskManager(database);
-            this.validator = new Validator(database);
-            this.trainer = new Trainer(database, this.neuralNetwork);
+                // Notify popup
+                this.broadcastToPopup({
+                    type: 'BACKEND_CONNECTED',
+                    data: { timestamp: Date.now() }
+                });
+            };
 
-            // Start periodic tasks
-            this.startPeriodicTasks();
+            this.ws.onmessage = (event) => {
+                this.handleBackendMessage(event.data);
+            };
 
-            this.initialized = true;
-            logger.info('Trading AI Agent initialized successfully');
+            this.ws.onerror = (error) => {
+                console.error('❌ WebSocket error:', error);
+            };
 
+            this.ws.onclose = () => {
+                console.log('❌ Disconnected from backend');
+                this.connected = false;
+                this.attemptReconnect();
+            };
+
+        } catch (error) {
+            console.error('Failed to connect:', error);
+            this.attemptReconnect();
+        }
+    }
+
+    /**
+     * Attempt to reconnect
+     */
+    attemptReconnect() {
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            console.error('Max reconnection attempts reached');
+            return;
+        }
+
+        this.reconnectAttempts++;
+        console.log(`Reconnecting in ${this.reconnectDelay}ms... (Attempt ${this.reconnectAttempts})`);
+
+        setTimeout(() => {
+            this.connect();
+        }, this.reconnectDelay);
+    }
+
+    /**
+     * Send data to backend
+     */
+    send(type, data) {
+        if (!this.connected || !this.ws) {
+            console.warn('Not connected to backend');
+            return false;
+        }
+
+        try {
+            this.ws.send(JSON.stringify({ type, data }));
             return true;
         } catch (error) {
-            logger.error('Failed to initialize agent', error);
+            console.error('Failed to send message:', error);
             return false;
         }
     }
 
     /**
-     * Start periodic background tasks
+     * Handle messages from backend
      */
-    startPeriodicTasks() {
-        // Validation task - every minute
-        this.validationInterval = setInterval(async () => {
-            try {
-                await this.validator.validatePredictions();
-
-                // Check if retraining needed
-                const shouldRetrain = await this.trainer.shouldRetrain();
-                if (shouldRetrain) {
-                    logger.info('Retraining threshold reached');
-                    await this.trainer.retrain();
-                }
-            } catch (error) {
-                logger.error('Validation task failed', error);
-            }
-        }, 60000); // Every minute
-
-        // Cleanup task - daily
-        setInterval(async () => {
-            try {
-                await database.cleanup();
-            } catch (error) {
-                logger.error('Cleanup task failed', error);
-            }
-        }, 86400000); // Every 24 hours
-
-        logger.info('Periodic tasks started');
-    }
-
-    /**
-     * Handle candles update from content script
-     */
-    async handleCandlesUpdate(candles) {
+    handleBackendMessage(message) {
         try {
-            // Store candles in database
-            await database.storeCandles(candles);
+            const data = JSON.parse(message);
+            console.log('📨 From backend:', data.type);
 
-            // Make prediction if we have enough candles
-            if (candles.length >= 20) {
-                const prediction = await this.makePrediction(candles);
+            switch (data.type) {
+                case 'CONNECTION_ESTABLISHED':
+                    console.log('Backend ready:', data.data.message);
+                    break;
 
-                if (prediction && prediction.meetsThreshold) {
-                    this.currentPrediction = prediction;
+                case 'PREDICTION':
+                    this.handlePrediction(data.data);
+                    break;
 
-                    // Check risk management
-                    const riskCheck = await this.riskManager.shouldAllowTrade(prediction);
+                case 'PONG':
+                    console.log('Pong received');
+                    break;
 
-                    if (riskCheck.allowed) {
-                        // Show notification
-                        await this.showPredictionNotification(prediction);
+                case 'ERROR':
+                    console.error('Backend error:', data.data);
+                    break;
 
-                        // Store prediction for validation
-                        await this.storePrediction(prediction);
-                    } else {
-                        logger.info('Trade blocked by risk management', riskCheck.failedChecks);
-                    }
-                }
+                default:
+                    console.log('Unknown message type:', data.type);
             }
+
+            // Broadcast to popup
+            this.broadcastToPopup(data);
+
         } catch (error) {
-            logger.error('Failed to handle candles update', error);
+            console.error('Failed to parse backend message:', error);
         }
     }
 
     /**
-     * Make prediction from candles
+     * Handle prediction from backend
      */
-    async makePrediction(candles) {
-        logger.info('Making prediction');
+    handlePrediction(prediction) {
+        console.log('🎯 Prediction received:', prediction);
+        this.currentPrediction = prediction;
 
-        try {
-            // Get ensemble prediction
-            const prediction = await this.ensemblePredictor.predict(candles);
-
-            if (!prediction) {
-                logger.warn('Prediction failed');
-                return null;
-            }
-
-            // Enhance with Gemini AI if available
-            if (this.geminiClient.isReady() && prediction.meetsThreshold) {
-                try {
-                    const aiAnalysis = await this.geminiClient.analyzePattern(
-                        prediction.features,
-                        prediction.patterns,
-                        candles
-                    );
-
-                    if (aiAnalysis) {
-                        prediction.aiAnalysis = aiAnalysis;
-
-                        // Adjust confidence based on AI analysis
-                        if (aiAnalysis.confidence) {
-                            const aiWeight = 0.2;
-                            const ensembleWeight = 0.8;
-                            prediction.confidence =
-                                (prediction.confidence * ensembleWeight) +
-                                (aiAnalysis.confidence * aiWeight);
-                        }
-                    }
-                } catch (error) {
-                    logger.warn('AI analysis failed', error);
-                }
-            }
-
-            return prediction;
-        } catch (error) {
-            logger.error('Prediction failed', error);
-            return null;
+        // Show notification
+        if (prediction.confidence >= 0.65) {
+            this.showNotification(prediction);
         }
     }
 
     /**
-     * Store prediction for later validation
+     * Show browser notification
      */
-    async storePrediction(prediction) {
-        const predictionData = {
-            timestamp: prediction.timestamp,
-            prediction: prediction.prediction,
-            confidence: prediction.confidence,
-            features: FeatureExtractor.featuresToArray(prediction.features),
-            patterns: prediction.patterns,
-            method: prediction.method,
-            validated: false,
-            wasCorrect: null,
-            actualOutcome: null,
-            validationTimestamp: null
-        };
-
-        const id = await database.storePrediction(predictionData);
-        logger.info(`Prediction stored with ID: ${id}`);
-        return id;
-    }
-
-    /**
-     * Show prediction notification
-     */
-    async showPredictionNotification(prediction) {
-        if (!CONFIG.NOTIFICATIONS.enabled || !CONFIG.NOTIFICATIONS.showOnPrediction) {
-            return;
-        }
-
+    showNotification(prediction) {
         const icon = prediction.prediction === 'UP' ? '📈' : '📉';
         const confidence = (prediction.confidence * 100).toFixed(1);
 
-        await chrome.notifications.create({
+        chrome.notifications.create({
             type: 'basic',
             iconUrl: 'icons/icon128.png',
             title: `${icon} ${prediction.prediction} Signal`,
@@ -225,92 +158,88 @@ class TradingAIAgent {
     }
 
     /**
-     * Get current status
+     * Broadcast message to all popup instances
      */
-    async getStatus() {
-        const dbStats = await database.getDatabaseStats();
-        const validationStats = await this.validator.getValidationStats();
-        const trainerStats = this.trainer.getStats();
-
-        return {
-            initialized: this.initialized,
-            currentPrediction: this.currentPrediction,
-            database: dbStats,
-            validation: validationStats,
-            training: trainerStats,
-            model: this.neuralNetwork.getSummary(),
-            geminiReady: this.geminiClient.isReady()
-        };
+    async broadcastToPopup(message) {
+        try {
+            // Try to send to popup if it's open
+            chrome.runtime.sendMessage(message).catch(() => {
+                // Popup not open, ignore
+            });
+        } catch (error) {
+            // Ignore if popup is not open
+        }
     }
 }
 
 // Create singleton instance
-const agent = new TradingAIAgent();
+const bridge = new BackendBridge();
 
-// Initialize on install
-chrome.runtime.onInstalled.addListener(async () => {
-    logger.info('Extension installed');
-    await agent.init();
+// Connect on startup
+chrome.runtime.onStartup.addListener(() => {
+    console.log('Extension started');
+    bridge.connect();
 });
 
-// Initialize on startup
-chrome.runtime.onStartup.addListener(async () => {
-    logger.info('Extension started');
-    await agent.init();
+// Connect on install
+chrome.runtime.onInstalled.addListener(() => {
+    console.log('Extension installed');
+    bridge.connect();
 });
 
-// Handle messages
+// Handle messages from content script and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    (async () => {
-        try {
-            logger.debug('Message received', { type: message.type });
+    console.log('Message received:', message.type);
 
-            switch (message.type) {
-                case 'CONTENT_READY':
-                    await agent.init();
-                    sendResponse({ success: true });
-                    break;
+    switch (message.type) {
+        case 'CONTENT_READY':
+            console.log('Content script ready on:', message.platform);
+            sendResponse({ success: true, connected: bridge.connected });
+            break;
 
-                case 'CANDLES_UPDATE':
-                    await agent.handleCandlesUpdate(message.candles);
-                    sendResponse({ success: true });
-                    break;
+        case 'CANDLES_UPDATE':
+            // Forward candles to Python backend
+            const sent = bridge.send('CANDLES_UPDATE', {
+                candles: message.candles,
+                platform: message.platform || 'quotex',
+                timestamp: message.timestamp || Date.now()
+            });
+            sendResponse({ success: sent });
+            break;
 
-                case 'GET_STATUS':
-                    const status = await agent.getStatus();
-                    sendResponse(status);
-                    break;
+        case 'GET_STATUS':
+            sendResponse({
+                connected: bridge.connected,
+                currentPrediction: bridge.currentPrediction,
+                reconnectAttempts: bridge.reconnectAttempts
+            });
+            break;
 
-                case 'GET_CURRENT_PREDICTION':
-                    sendResponse({ prediction: agent.currentPrediction });
-                    break;
+        case 'RECONNECT_BACKEND':
+            bridge.connect();
+            sendResponse({ success: true });
+            break;
 
-                case 'FORCE_RETRAIN':
-                    const success = await agent.trainer.retrain();
-                    sendResponse({ success });
-                    break;
+        case 'PING_BACKEND':
+            bridge.send('PING', { timestamp: Date.now() });
+            sendResponse({ success: true });
+            break;
 
-                case 'OPEN_POPUP':
-                    chrome.action.openPopup();
-                    sendResponse({ success: true });
-                    break;
-
-                default:
-                    sendResponse({ error: 'Unknown message type' });
-            }
-        } catch (error) {
-            logger.error('Message handler error', error);
-            sendResponse({ error: error.message });
-        }
-    })();
+        default:
+            sendResponse({ error: 'Unknown message type' });
+    }
 
     return true; // Keep channel open for async response
 });
 
-// Export for testing
-export { agent, TradingAIAgent };
+// Auto-connect when service worker loads
+bridge.connect();
 
-// Auto-initialize when service worker loads
-agent.init().catch(error => {
-    logger.error('Auto-initialization failed', error);
-});
+// Keep service worker alive with periodic ping
+setInterval(() => {
+    if (bridge.connected) {
+        bridge.send('PING', { timestamp: Date.now() });
+    }
+}, 30000); // Every 30 seconds
+
+console.log('🤖 Trading AI Extension - Background worker loaded');
