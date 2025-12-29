@@ -48,7 +48,7 @@ export class CanvasReader {
             return 'iqoption';
         }
 
-        return null;
+        return 'generic';
     }
 
     /**

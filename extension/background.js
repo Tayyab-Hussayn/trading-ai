@@ -13,6 +13,7 @@ class BackendBridge {
         this.maxReconnectAttempts = 5;
         this.reconnectDelay = 3000;
         this.currentPrediction = null;
+        this.lastStatus = null; // Cache for backend status
     }
 
     /**
@@ -34,6 +35,9 @@ class BackendBridge {
                     type: 'BACKEND_CONNECTED',
                     data: { timestamp: Date.now() }
                 });
+
+                // Request initial status
+                this.send('GET_STATUS', {});
             };
 
             this.ws.onmessage = (event) => {
@@ -97,7 +101,7 @@ class BackendBridge {
     handleBackendMessage(message) {
         try {
             const data = JSON.parse(message);
-            console.log('📨 From backend:', data.type);
+            // console.log('📨 From backend:', data.type); // Reduce noise
 
             switch (data.type) {
                 case 'CONNECTION_ESTABLISHED':
@@ -108,19 +112,20 @@ class BackendBridge {
                     this.handlePrediction(data.data);
                     break;
 
+                case 'STATUS':
+                    this.lastStatus = data.data; // Update cache
+                    break;
+
                 case 'PONG':
-                    console.log('Pong received');
+                    // console.log('Pong received');
                     break;
 
                 case 'ERROR':
                     console.error('Backend error:', data.data);
                     break;
-
-                default:
-                    console.log('Unknown message type:', data.type);
             }
 
-            // Broadcast to popup
+            // Always broadcast to popup so it gets live updates
             this.broadcastToPopup(data);
 
         } catch (error) {
@@ -152,7 +157,7 @@ class BackendBridge {
             type: 'basic',
             iconUrl: 'icons/icon128.png',
             title: `${icon} ${prediction.prediction} Signal`,
-            message: `Confidence: ${confidence}%\nMethod: ${prediction.method}`,
+            message: `Confidence: ${confidence}%\nMethod: ${prediction.method}\nPattern: ${prediction.patterns?.[0] || 'Unknown'}`,
             priority: 2
         });
     }
@@ -162,12 +167,11 @@ class BackendBridge {
      */
     async broadcastToPopup(message) {
         try {
-            // Try to send to popup if it's open
             chrome.runtime.sendMessage(message).catch(() => {
-                // Popup not open, ignore
+                // Ignore if popup is closed
             });
         } catch (error) {
-            // Ignore if popup is not open
+            // Ignore if popup is closed
         }
     }
 }
@@ -189,7 +193,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Handle messages from content script and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log('Message received:', message.type);
+    // console.log('Message received:', message.type);
 
     switch (message.type) {
         case 'CONTENT_READY':
@@ -208,17 +212,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             break;
 
         case 'GET_STATUS':
-            sendResponse({
+            // 1. Send immediate response with cached data
+            const statusResponse = {
+                initialized: bridge.connected,
                 connected: bridge.connected,
                 currentPrediction: bridge.currentPrediction,
-                reconnectAttempts: bridge.reconnectAttempts
-            });
+                reconnectAttempts: bridge.reconnectAttempts,
+                // Merge backend stats if available
+                ...(bridge.lastStatus || {})
+            };
+
+            sendResponse(statusResponse);
+
+            // 2. Refresh cache asynchronously
+            bridge.send('GET_STATUS', {});
             break;
 
         case 'RECONNECT_BACKEND':
             bridge.connect();
             sendResponse({ success: true });
             break;
+
+        case 'RESET_MODEL':
+            // Forward reset command to backend (if we had an endpoint, but we don't yet via WebSocket)
+            // We can send a generic message or HTTP POST
+            fetch('http://localhost:8000/retrain', { method: 'POST' })
+                .then(() => sendResponse({ success: true }))
+                .catch(err => sendResponse({ success: false, error: err.toString() }));
+            return true; // Async
 
         case 'PING_BACKEND':
             bridge.send('PING', { timestamp: Date.now() });
@@ -229,17 +250,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ error: 'Unknown message type' });
     }
 
-    return true; // Keep channel open for async response
+    // Return synchronous response for non-async cases
+    // (except RESET_MODEL which returns true)
+    return false;
 });
 
 // Auto-connect when service worker loads
 bridge.connect();
 
-// Keep service worker alive with periodic ping
+// Keep service worker alive with periodic ping & status update
 setInterval(() => {
     if (bridge.connected) {
-        bridge.send('PING', { timestamp: Date.now() });
+        bridge.send('GET_STATUS', {}); // Periodic status refresh
     }
-}, 30000); // Every 30 seconds
+}, 2000);
 
 console.log('🤖 Trading AI Extension - Background worker loaded');

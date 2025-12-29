@@ -23,6 +23,12 @@ class TradingPlatformObserver {
 
         // Detect platform
         this.platformType = CanvasReader.detectPlatform();
+
+        if (!this.platformType) {
+            console.log('[Trading AI] No trading platform detected, sleeping...');
+            return;
+        }
+
         console.log(`[Trading AI] Detected platform: ${this.platformType}`);
 
         // Wait for page to load

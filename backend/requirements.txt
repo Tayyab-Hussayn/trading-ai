@@ -1,31 +1,31 @@
 # Web Framework
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-websockets==12.0
-python-multipart==0.0.6
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+websockets>=12.0
+python-multipart>=0.0.6
 
 # Machine Learning
-torch==2.1.2
-numpy==1.26.3
-pandas==2.1.4
-scikit-learn==1.4.0
+torch>=2.5.0
+numpy>=1.26.0
+pandas>=2.1.0
+scikit-learn>=1.4.0
 
 # Database
-sqlalchemy==2.0.25
-psycopg2-binary==2.9.9
-alembic==1.13.1
+sqlalchemy>=2.0.25
+psycopg2-binary>=2.9.9
+alembic>=1.13.1
 
 # AI Integration
-google-generativeai==0.3.2
-python-dotenv==1.0.0
+google-generativeai>=0.3.2
+python-dotenv>=1.0.0
 
 # Utilities
-pydantic==2.5.3
-python-json-logger==2.0.7
-aiofiles==23.2.1
-httpx==0.26.0
+pydantic>=2.5.3
+python-json-logger>=2.0.7
+aiofiles>=23.2.1
+httpx>=0.26.0
 
 # Development
-pytest==7.4.4
-pytest-asyncio==0.23.3
-black==24.1.1
+pytest>=7.4.4
+pytest-asyncio>=0.23.3
+black>=24.1.1

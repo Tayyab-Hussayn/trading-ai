@@ -31,21 +31,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Create FastAPI app
-app = FastAPI(
-    title="Binary Trading AI Backend",
-    description="Intelligent AI system for binary trading pattern recognition and prediction",
-    version="1.0.0"
-)
+# ... imports ...
+from contextlib import asynccontextmanager
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# ... logging setup ...
 
 # Global instances
 db_manager: DatabaseManager = None
@@ -60,11 +49,11 @@ active_connections: List[WebSocket] = []
 # Background tasks
 background_tasks_running = False
 
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize system on startup"""
-    global db_manager, model_manager, gemini_client, prediction_engine, learning_system
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifecycle manager for the FastAPI app"""
+    # Startup
+    global db_manager, model_manager, gemini_client, prediction_engine, learning_system, background_tasks_running
     
     logger.info("=" * 60)
     logger.info("🚀 Starting Binary Trading AI Backend")
@@ -108,16 +97,36 @@ async def startup_event():
         logger.error(f"❌ Startup failed: {e}", exc_info=True)
         raise
 
+    yield
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
+    # Shutdown
     logger.info("Shutting down...")
+    background_tasks_running = False
     
     if db_manager:
         db_manager.close()
     
     logger.info("Shutdown complete")
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="Binary Trading AI Backend",
+    description="Intelligent AI system for binary trading pattern recognition and prediction",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 
 
 async def background_validation_loop():
