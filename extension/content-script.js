@@ -159,9 +159,9 @@ class TradingPlatformObserver {
         if (!this.canvasReader) return;
 
         try {
-            const candles = this.canvasReader.readCandles();
+            const candles = await this.canvasReader.readCandles();
 
-            if (candles.length > 0) {
+            if (candles && candles.length > 0) {
                 // Send to background worker
                 chrome.runtime.sendMessage({
                     type: 'CANDLES_UPDATE',

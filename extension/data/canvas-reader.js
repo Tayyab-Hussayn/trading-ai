@@ -69,7 +69,7 @@ export class CanvasReader {
         // Filter out small UI canvases (like indicators, sparklines)
         const validCanvases = candidates.filter(c => {
             const rect = c.getBoundingClientRect();
-            return c.width > 400 && c.height > 300 && rect.width > 400 && rect.height > 300;
+            return c.width > 100 && c.height > 100 && rect.width > 100 && rect.height > 100;
         });
 
         if (validCanvases.length === 0) {

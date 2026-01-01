@@ -10,7 +10,7 @@ class BackendBridge {
         this.ws = null;
         this.connected = false;
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
+        this.maxReconnectAttempts = 300; // Try for ~15 minutes
         this.reconnectDelay = 3000;
         this.currentPrediction = null;
         this.lastStatus = null; // Cache for backend status
@@ -20,6 +20,10 @@ class BackendBridge {
      * Connect to Python backend
      */
     async connect() {
+        if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) {
+            return; // Already connecting or connected
+        }
+
         console.log('[Backend Bridge] Connecting to:', BACKEND_URL);
 
         try {
@@ -51,6 +55,7 @@ class BackendBridge {
             this.ws.onclose = () => {
                 console.log('❌ Disconnected from backend');
                 this.connected = false;
+                this.ws = null; // Cleanup
                 this.attemptReconnect();
             };
 
@@ -118,6 +123,21 @@ class BackendBridge {
 
                 case 'PONG':
                     // console.log('Pong received');
+                    break;
+
+                case 'NO_SIGNAL':
+                    this.currentPrediction = {
+                        prediction: 'NEUTRAL',
+                        confidence: data.data.confidence || 0,
+                        method: 'Scanning',
+                        patterns: [],
+                        timestamp: Date.now()
+                    };
+                    break;
+
+                case 'INSUFFICIENT_DATA':
+                    // Don't update currentPrediction with invalid data, but verify we are connected
+                    // Maybe broadcast status update
                     break;
 
                 case 'ERROR':
@@ -212,6 +232,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             break;
 
         case 'GET_STATUS':
+            // If not connected, try to trigger a reconnect (lazily)
+            if (!bridge.connected) {
+                bridge.connect();
+            }
+
             // 1. Send immediate response with cached data
             const statusResponse = {
                 initialized: bridge.connected,
@@ -225,7 +250,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse(statusResponse);
 
             // 2. Refresh cache asynchronously
-            bridge.send('GET_STATUS', {});
+            if (bridge.connected) {
+                bridge.send('GET_STATUS', {});
+            }
             break;
 
         case 'RECONNECT_BACKEND':
@@ -240,6 +267,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 .then(() => sendResponse({ success: true }))
                 .catch(err => sendResponse({ success: false, error: err.toString() }));
             return true; // Async
+
+        case 'CAPTURE_TAB':
+            chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
+                if (chrome.runtime.lastError) {
+                    console.error('Failed to capture tab', chrome.runtime.lastError);
+                    sendResponse({ error: chrome.runtime.lastError.message });
+                } else {
+                    sendResponse({ dataUrl });
+                }
+            });
+            return true;
 
         case 'PING_BACKEND':
             bridge.send('PING', { timestamp: Date.now() });

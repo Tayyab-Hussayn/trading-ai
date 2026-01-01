@@ -163,9 +163,15 @@ class PopupUI {
         const signalText = document.getElementById('signalDirection').querySelector('.signal-text');
         const signalIcon = document.getElementById('signalDirection').querySelector('.signal-icon');
 
-        signalText.textContent = prediction.prediction;
-        signalText.className = `signal-text ${prediction.prediction.toLowerCase()}`;
-        signalIcon.textContent = prediction.prediction === 'UP' ? '📈' : '📉';
+        if (prediction.prediction === 'NEUTRAL') {
+            signalText.textContent = 'SCANNING...';
+            signalText.className = 'signal-text neutral';
+            signalIcon.textContent = '🔍';
+        } else {
+            signalText.textContent = prediction.prediction;
+            signalText.className = `signal-text ${prediction.prediction.toLowerCase()}`;
+            signalIcon.textContent = prediction.prediction === 'UP' ? '📈' : '📉';
+        }
 
         // Confidence
         const confidence = Math.round(prediction.confidence * 100);
