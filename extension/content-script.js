@@ -158,6 +158,15 @@ class TradingPlatformObserver {
     async scanAndSend() {
         if (!this.canvasReader) return;
 
+        // Check if canvas is still valid
+        if (!this.canvasReader.checkCanvas()) {
+            console.warn('[Trading AI] ⚠️ Canvas detached or invalid. Restarting search...');
+            this.stopScanning();
+            this.canvasReader = null;
+            this.findAndObserveCanvas();
+            return;
+        }
+
         try {
             const candles = await this.canvasReader.readCandles();
 

@@ -330,6 +330,21 @@ export class CanvasReader {
     }
 
     /**
+     * Check if canvas is valid and connected
+     */
+    checkCanvas() {
+        if (!this.canvas) return false;
+        if (!this.canvas.isConnected) return false;
+        if (this.canvas.width === 0 || this.canvas.height === 0) return false;
+
+        // Optional: Check if display is none
+        const style = window.getComputedStyle(this.canvas);
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+
+        return true;
+    }
+
+    /**
      * Take screenshot of canvas for debugging
      */
     takeScreenshot() {

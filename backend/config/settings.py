@@ -38,7 +38,7 @@ class Settings:
     
     # Prediction
     MIN_CONFIDENCE_THRESHOLD = 0.65
-    VALIDATION_DELAY_MINUTES = 5
+    VALIDATION_DELAY_MINUTES = 2
     ENSEMBLE_WEIGHTS = {
         "historical": 0.4,
         "ml": 0.6

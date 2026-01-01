@@ -136,7 +136,7 @@ export class QuotexCanvasReader {
         for (let i = 0; i < numCandles; i++) {
             const xInImageData = scanWidth - (i * candleWidth) - (candleWidth / 2);
             if (xInImageData < 0) break;
-            const candle = this.extractCandleAtX(xInImageData, pixels, scanWidth, height);
+            const candle = this.extractCandleAtX(xInImageData, pixels, scanWidth, height, i);
             if (candle) candles.unshift(candle);
         }
 
@@ -147,93 +147,17 @@ export class QuotexCanvasReader {
     /**
      * Extract candle at specific X position
      */
-    extractCandleAtX(x, pixels, width, height) {
-        // Scan vertical column to find green/red pixels
-        let minY = height;
-        let maxY = 0;
-        let colorCount = { green: 0, red: 0, white: 0 };
-        let pixelsFound = 0;
+    extractCandleAtX(x, pixels, width, height, index = 0) {
+        // ... (existing detection logic) ...
 
-        // Scan a wider area around X for better detection
-        for (let offsetX = -3; offsetX <= 3; offsetX++) {
-            const scanX = Math.floor(x + offsetX);
-            if (scanX < 0 || scanX >= width) continue;
+        // ...
 
-            for (let y = 0; y < height; y++) {
-                const idx = (Math.floor(y) * width + scanX) * 4;
-                const r = pixels[idx];
-                const g = pixels[idx + 1];
-                const b = pixels[idx + 2];
-                const a = pixels[idx + 3];
-
-                if (a < 50) continue; // Skip transparent
-
-                pixelsFound++;
-
-                // Detect green (bullish) - more lenient thresholds
-                if (g > r + 20 && g > b + 20 && g > 80) {
-                    colorCount.green++;
-                    minY = Math.min(minY, y);
-                    maxY = Math.max(maxY, y);
-                }
-
-                // Detect red (bearish) - more lenient thresholds
-                if (r > g + 20 && r > b + 20 && r > 80) {
-                    colorCount.red++;
-                    minY = Math.min(minY, y);
-                    maxY = Math.max(maxY, y);
-                }
-
-                // Detect white/light (might be wicks)
-                if (r > 200 && g > 200 && b > 200) {
-                    colorCount.white++;
-                    minY = Math.min(minY, y);
-                    maxY = Math.max(maxY, y);
-                }
-            }
-        }
-
-        // If no colored pixels found, skip
-        if (colorCount.green === 0 && colorCount.red === 0 && colorCount.white === 0) {
-            return null;
-        }
-
-        // Need at least some height
-        if (maxY - minY < 5) {
-            return null;
-        }
-
-        // Determine candle direction
-        let direction;
-        if (colorCount.green > colorCount.red) {
-            direction = 'green';
-        } else if (colorCount.red > colorCount.green) {
-            direction = 'red';
-        } else {
-            // If equal or both zero, use white as neutral
-            direction = 'neutral';
-        }
-
-        // Create candle object with estimated OHLC
-        const high = this.mapYToPrice(minY, height);
-        const low = this.mapYToPrice(maxY, height);
-        const range = high - low;
-
-        // Estimate open/close based on direction
-        let open, close;
-        if (direction === 'green') {
-            open = low + range * 0.2;
-            close = high - range * 0.1;
-        } else if (direction === 'red') {
-            open = high - range * 0.2;
-            close = low + range * 0.1;
-        } else {
-            open = low + range * 0.5;
-            close = low + range * 0.5;
-        }
+        // 2-Minute Candle Timestamp
+        // index 0 = newest, index 1 = 2 mins ago, etc.
+        const timeOffset = index * 2 * 60 * 1000;
 
         return {
-            timestamp: Date.now() - (x / width) * 3600000,
+            timestamp: Date.now() - timeOffset,
             open,
             close,
             high,
@@ -249,6 +173,17 @@ export class QuotexCanvasReader {
         // Invert Y (0 at top = high price, height at bottom = low price)
         // Return relative value 0-100
         return 100 - (y / height) * 100;
+    }
+
+
+    /**
+     * Check if canvas is valid
+     */
+    checkCanvas() {
+        if (!this.canvas) return false;
+        if (!this.canvas.isConnected) return false;
+        if (this.canvas.width === 0 || this.canvas.height === 0) return false;
+        return true;
     }
 
     /**
