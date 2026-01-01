@@ -267,20 +267,20 @@ class FeatureExtractor:
         for key in scalar_keys:
             feature_array.append(features.get(key, 0))
         
-        # Add last 5 body ratios
+        # Add last 11 body ratios
         body_ratios = features.get('body_ratios', [0] * 20)
-        feature_array.extend(body_ratios[-5:])
+        feature_array.extend(body_ratios[-11:])
         
-        # Add last 5 body directions
+        # Add last 11 body directions
         body_directions = features.get('body_directions', [0] * 20)
-        feature_array.extend(body_directions[-5:])
+        feature_array.extend(body_directions[-11:])
         
-        # Add last 5 upper wick ratios
+        # Add last 11 upper wick ratios
         upper_wicks = features.get('upper_wick_ratios', [0] * 20)
-        feature_array.extend(upper_wicks[-5:])
+        feature_array.extend(upper_wicks[-11:])
         
-        # Add last 5 lower wick ratios
+        # Add last 11 lower wick ratios
         lower_wicks = features.get('lower_wick_ratios', [0] * 20)
-        feature_array.extend(lower_wicks[-5:])
+        feature_array.extend(lower_wicks[-11:])
         
         return np.array(feature_array, dtype=np.float32)
