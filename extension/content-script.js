@@ -51,6 +51,9 @@ class TradingPlatformObserver {
     findAndObserveCanvas() {
         console.log('[Trading AI] Searching for chart canvas...');
 
+        // Notify backend we are searching
+        chrome.runtime.sendMessage({ type: 'SEARCHING_CANVAS' });
+
         // Try to find canvas immediately
         let canvas = CanvasReader.findChartCanvas();
 
@@ -87,11 +90,12 @@ class TradingPlatformObserver {
             subtree: true
         });
 
-        // Stop observing after 30 seconds
+        // Retry after 10 seconds if nothing found
         setTimeout(() => {
             observer.disconnect();
-            console.log('[Trading AI] DOM observation timeout');
-        }, 30000);
+            console.log('[Trading AI] DOM observation timeout - Retrying search...');
+            this.findAndObserveCanvas();
+        }, 10000);
     }
 
     /**
@@ -182,6 +186,12 @@ class TradingPlatformObserver {
                 console.log(`[Trading AI] ✅ Sent ${candles.length} candles to background`);
             } else {
                 console.warn('[Trading AI] ⚠️ No candles detected in current scan');
+                // Notify backend of empty scan (so we know it's running but blind)
+                chrome.runtime.sendMessage({
+                    type: 'NO_CANDLES_DETECTED',
+                    timestamp: Date.now(),
+                    platform: this.platformType
+                });
             }
         } catch (error) {
             console.error('[Trading AI] ❌ Scan error:', error);

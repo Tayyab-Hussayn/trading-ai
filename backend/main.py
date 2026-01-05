@@ -276,6 +276,12 @@ async def websocket_endpoint(websocket: WebSocket):
                     "type": "STATUS",
                     "data": status
                 })
+
+            elif message_type == "NO_CANDLES_DETECTED":
+                logger.warning(f"⚠️ Extension reports NO candles detected (Screen might be blank/minimized)")
+                
+            elif message_type == "SEARCHING_CANVAS":
+                logger.info("🔍 Extension is searching for chart canvas...")
                 
             else:
                 logger.warning(f"Unknown message type: {message_type}")

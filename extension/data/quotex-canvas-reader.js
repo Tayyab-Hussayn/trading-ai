@@ -116,8 +116,12 @@ export class QuotexCanvasReader {
 
     processImageData(pixels, scanWidth, height) {
         const candles = [];
-        const candleWidth = 15;
+
+        // Dynamically estimate candle width instead of hardcoding
+        const candleWidth = this.estimateCandleWidth(pixels, scanWidth, height);
         const numCandles = Math.floor(scanWidth / candleWidth);
+
+        logger.info(`Extracted candle width: ${candleWidth.toFixed(1)}px, count: ${numCandles}`);
 
         let hasColor = false;
         for (let i = 0; i < 300; i += 4) {
@@ -134,6 +138,7 @@ export class QuotexCanvasReader {
         }
 
         for (let i = 0; i < numCandles; i++) {
+            // Center the sampling X in the middle of the estimated candle slot
             const xInImageData = scanWidth - (i * candleWidth) - (candleWidth / 2);
             if (xInImageData < 0) break;
             const candle = this.extractCandleAtX(xInImageData, pixels, scanWidth, height, i);
@@ -145,12 +150,179 @@ export class QuotexCanvasReader {
     }
 
     /**
+     * Estimate candle width dynamically
+     */
+    estimateCandleWidth(pixels, width, height) {
+        // Sample middle row
+        const y = Math.floor(height / 2);
+        const colorChanges = [];
+        let lastColor = null;
+
+        // Scan the row
+        for (let x = 0; x < width; x++) {
+            const idx = (y * width + x) * 4;
+            // Simple check: is it non-transparent?
+            const alpha = pixels[idx + 3];
+            const hasContent = alpha > 50;
+
+            if (hasContent && !lastColor) {
+                // Entered a candle
+                colorChanges.push(x);
+                lastColor = true;
+            } else if (!hasContent && lastColor) {
+                // Exited a candle
+                // colorChanges.push(x); // track gaps too?
+                lastColor = false;
+            }
+        }
+
+        if (colorChanges.length < 2) return 15; // Fallback
+
+        const distances = [];
+        for (let i = 1; i < colorChanges.length; i++) {
+            distances.push(colorChanges[i] - colorChanges[i - 1]);
+        }
+
+        // Median distance
+        distances.sort((a, b) => a - b);
+        const median = distances[Math.floor(distances.length / 2)];
+
+        if (median > 5 && median < 100) return median;
+        return 15; // Fallback
+    }
+
+    /**
+     * Convert RGB to HSL
+     */
+    rgbToHsl(r, g, b) {
+        r /= 255; g /= 255; b /= 255;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        let h, s, l = (max + min) / 2;
+
+        if (max === min) {
+            h = s = 0; // achromatic
+        } else {
+            const d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            switch (max) {
+                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                case g: h = (b - r) / d + 2; break;
+                case b: h = (r - g) / d + 4; break;
+            }
+            h /= 6;
+        }
+        return [h * 360, s, l];
+    }
+
+    /**
      * Extract candle at specific X position
      */
     extractCandleAtX(x, pixels, width, height, index = 0) {
-        // ... (existing detection logic) ...
+        // Scan vertical column to find green/red pixels
+        let minY = height;
+        let maxY = 0;
+        let colorCount = { green: 0, red: 0, white: 0 };
+        let pixelsFound = 0;
 
-        // ...
+        // Scan a wider area around X for better detection
+        for (let offsetX = -3; offsetX <= 3; offsetX++) {
+            const scanX = Math.floor(x + offsetX);
+            if (scanX < 0 || scanX >= width) continue;
+
+            for (let y = 0; y < height; y++) {
+                const idx = (Math.floor(y) * width + scanX) * 4;
+                const r = pixels[idx];
+                const g = pixels[idx + 1];
+                const b = pixels[idx + 2];
+                const a = pixels[idx + 3];
+
+                if (a < 50) continue; // Skip transparent
+
+                const [h, s, l] = this.rgbToHsl(r, g, b);
+
+                // Skip very dark (background) or very transparent pixels
+                // Quotex background is dark, so L < 0.15 is likely background
+                if (l < 0.15) continue;
+
+                pixelsFound++;
+
+                // Detect Green (Bullish) - Broaden range for Teal/Cyan/Lime
+                // Hue 70-170 (Green is 120, Cyan is 180)
+                // Saturation > 0.15 (allow slightly washed out)
+                if (h >= 70 && h <= 175 && s > 0.15) {
+                    colorCount.green++;
+                    minY = Math.min(minY, y);
+                    maxY = Math.max(maxY, y);
+                }
+
+                // Detect Red (Bearish) - Broaden range for Orange/Purple-Red
+                // Hue 330-360 OR 0-40 (Red is 0)
+                // Saturation > 0.15
+                else if ((h >= 330 || h <= 40) && s > 0.15) {
+                    colorCount.red++;
+                    minY = Math.min(minY, y);
+                    maxY = Math.max(maxY, y);
+                }
+
+                // Detect White/Gray (Wicks/Neutral)
+                else if (l > 0.6 || s < 0.1) {
+                    colorCount.white++;
+                    minY = Math.min(minY, y);
+                    maxY = Math.max(maxY, y);
+                }
+            }
+        }
+
+        // If no colored pixels found, skip
+        if (colorCount.green === 0 && colorCount.red === 0 && colorCount.white === 0) {
+            return null;
+        }
+
+        // Need at least some height
+        if (maxY - minY < 3) { // Lower threshold
+            return null;
+        }
+
+        // Determine candle direction
+        let direction;
+        // Require a dominant color
+        // If Green is significant
+        if (colorCount.green > colorCount.red && colorCount.green > 2) {
+            direction = 'green';
+        }
+        // If Red is significant
+        else if (colorCount.red > colorCount.green && colorCount.red > 2) {
+            direction = 'red';
+        } else {
+            // Neutral
+            direction = 'neutral';
+        }
+
+        // Create candle object with estimated OHLC
+        // mapYToPrice: 0 (top) -> 100, height (bottom) -> 0
+        const high = this.mapYToPrice(minY, height); // Top pixel = High Price
+        const low = this.mapYToPrice(maxY, height);  // Bottom pixel = Low Price
+        const range = high - low;
+
+        // Estimate open/close based on direction
+        let open, close;
+
+        // Improved Estimation Logic
+        if (direction === 'green') {
+            // Green: Opens low, Closes high
+            // Body usually covers ~60-80% of range (unless specific pattern)
+            // We assume a standard candle structure for estimation
+            open = low + (range * 0.2);
+            close = high - (range * 0.1);
+        } else if (direction === 'red') {
+            // Red: Opens high, Closes low
+            open = high - (range * 0.2);
+            close = low + (range * 0.1);
+        } else {
+            // Neutral/Doji: Open ~= Close near midpoint
+            open = low + (range * 0.5);
+            close = low + (range * 0.5);
+        }
 
         // 2-Minute Candle Timestamp
         // index 0 = newest, index 1 = 2 mins ago, etc.

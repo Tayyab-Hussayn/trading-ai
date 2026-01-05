@@ -231,6 +231,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ success: sent });
             break;
 
+        case 'NO_CANDLES_DETECTED':
+            bridge.send('NO_CANDLES_DETECTED', { timestamp: Date.now() });
+            sendResponse({ success: true });
+            break;
+
+        case 'SEARCHING_CANVAS':
+            bridge.send('SEARCHING_CANVAS', { timestamp: Date.now() });
+            sendResponse({ success: true });
+            break;
+
         case 'GET_STATUS':
             // If not connected, try to trigger a reconnect (lazily)
             if (!bridge.connected) {

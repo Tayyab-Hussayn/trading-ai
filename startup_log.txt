@@ -1,0 +1,54 @@
+🚀 Starting Binary Trading AI System
+====================================
+🔧 Activating virtual environment...
+📥 Installing Python dependencies...
+
+✅ Starting Backend Server...
+====================================
+📡 WebSocket: ws://localhost:8000/ws
+🌐 API: http://localhost:8000
+📚 Docs: http://localhost:8000/docs
+====================================
+
+/home/krawin/code/Trading-AI/backend/ai/gemini_client.py:5: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+2026-01-01 13:46:11,620 - __main__ - INFO - 🚀 Starting Binary Trading AI Backend...
+2026-01-01 13:46:11,621 - __main__ - INFO - 📡 WebSocket will be available at: ws://localhost:8000/ws
+2026-01-01 13:46:11,621 - __main__ - INFO - 🌐 API will be available at: http://localhost:8000
+2026-01-01 13:46:11,621 - __main__ - INFO - 📚 API Docs: http://localhost:8000/docs
+INFO:     Started server process [18623]
+INFO:     Waiting for application startup.
+2026-01-01 13:46:12,019 - __main__ - INFO - ============================================================
+2026-01-01 13:46:12,027 - __main__ - INFO - 🚀 Starting Binary Trading AI Backend
+2026-01-01 13:46:12,030 - __main__ - INFO - ============================================================
+2026-01-01 13:46:12,032 - __main__ - INFO - 📊 Initializing database...
+2026-01-01 13:46:12,045 - data.database - INFO - Database tables created/verified
+2026-01-01 13:46:12,047 - data.database - INFO - Connected to database: trading_ai.db
+2026-01-01 13:46:12,049 - __main__ - INFO - 🧠 Initializing neural network...
+2026-01-01 13:46:12,053 - ml.neural_network - INFO - Using device: cpu
+2026-01-01 13:46:14,737 - ml.neural_network - INFO - Initialized new model
+2026-01-01 13:46:14,737 - __main__ - INFO - 🤖 Initializing Gemini AI...
+2026-01-01 13:46:14,738 - ai.gemini_client - INFO - Gemini AI initialized with model: gemini-2.0-flash-exp
+2026-01-01 13:46:14,738 - __main__ - INFO - 🎯 Initializing prediction engine...
+2026-01-01 13:46:14,738 - __main__ - INFO - 📚 Initializing learning system...
+2026-01-01 13:46:14,738 - __main__ - INFO - ============================================================
+2026-01-01 13:46:14,738 - __main__ - INFO - ✅ System initialized successfully!
+2026-01-01 13:46:14,739 - __main__ - INFO - ============================================================
+2026-01-01 13:46:14,739 - __main__ - INFO - 📡 WebSocket: ws://localhost:8000/ws
+2026-01-01 13:46:14,739 - __main__ - INFO - 🌐 API Docs: http://localhost:8000/docs
+2026-01-01 13:46:14,739 - __main__ - INFO - ============================================================
+2026-01-01 13:46:14,739 - __main__ - INFO - 🔄 Background validation loop started
+INFO:     Application startup complete.
+ERROR:    [Errno 98] error while attempting to bind on address ('0.0.0.0./start.sh: line 44: 18673 Killed                     python main.py
+utdown.
+2026-01-01 13:46:14,741 - __main__ - INFO - Shutting down...
+2026-01-01 13:46:14,742 - data.database - INFO - Database connection closed
+2026-01-01 13:46:14,742 - __main__ - INFO - Shutdown complete
+INFO:     Application shutdown complete.
